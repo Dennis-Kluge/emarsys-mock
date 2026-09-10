@@ -285,3 +285,48 @@ func TestControlPlaneIsNotRateLimited(t *testing.T) {
 		}
 	}
 }
+
+// TestInjected429CarriesRetryAfter closes a gap found by running the app rather
+// than by a test: an injected 429 without Retry-After is not the 429 production
+// sends, so a client whose backoff reads that header never exercises the path
+// the injection exists to exercise.
+func TestInjected429CarriesRetryAfter(t *testing.T) {
+	handler, _ := newTestServer(t)
+	createFault(t, handler, `{"match_path_pattern":"/api/*","http_status":429,"remaining_hits":1}`)
+
+	rec := recordRequest(handler, newSignedRequest(t, http.MethodGet, "/api/v2/field", ""))
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", rec.Code)
+	}
+
+	retryAfter := rec.Header().Get("Retry-After")
+	if retryAfter == "" {
+		t.Fatal("no Retry-After on an injected 429")
+	}
+	if _, err := strconv.Atoi(retryAfter); err != nil {
+		t.Errorf("Retry-After = %q, want a number of seconds", retryAfter)
+	}
+}
+
+func TestInjectedRetryAfterIsOverridable(t *testing.T) {
+	handler, _ := newTestServer(t)
+	createFault(t, handler,
+		`{"match_path_pattern":"/api/*","http_status":503,"retry_after":5,"remaining_hits":1}`)
+
+	rec := recordRequest(handler, newSignedRequest(t, http.MethodGet, "/api/v2/field", ""))
+	if got := rec.Header().Get("Retry-After"); got != "5" {
+		t.Errorf("Retry-After = %q, want 5", got)
+	}
+}
+
+func TestOtherInjectedStatusesHaveNoRetryAfter(t *testing.T) {
+	// A 500 with a Retry-After would be inventing behaviour production does not
+	// have, which is the same failure as omitting one from a 429.
+	handler, _ := newTestServer(t)
+	createFault(t, handler, `{"match_path_pattern":"/api/*","http_status":500,"remaining_hits":1}`)
+
+	rec := recordRequest(handler, newSignedRequest(t, http.MethodGet, "/api/v2/field", ""))
+	if got := rec.Header().Get("Retry-After"); got != "" {
+		t.Errorf("Retry-After = %q on a 500, want none", got)
+	}
+}

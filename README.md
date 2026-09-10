@@ -197,7 +197,11 @@ cookie.
 
 A fault rule matches on method, a path glob and a body substring, and forces a
 response: HTTP status, replyCode and replyText. `probability` below 1 makes it
-flaky; `remaining_hits` spends it after a fixed number of requests.
+flaky; `remaining_hits` spends it after a fixed number of requests. A 429 or a
+503 also gets a `Retry-After` header, defaulted and overridable with
+`retry_after` — an injected 429 that lacks it is not the 429 production sends,
+and a client whose backoff reads that header would never exercise the path the
+injection exists for.
 
 ```sh
 # the next API request fails with 429, then the rule retires itself

@@ -383,6 +383,11 @@ func (s *Server) adminFaultCreate(w http.ResponseWriter, r *http.Request) {
 			rule.RemainingHits = &n
 		}
 	}
+	if raw := strings.TrimSpace(r.PostFormValue("retry_after")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil {
+			rule.RetryAfter = &n
+		}
+	}
 
 	created, err := s.db.CreateFaultRule(r.Context(), rule)
 	if err != nil {

@@ -33,6 +33,7 @@
       <input type="text" name="reply_text" placeholder="reply text" value="Internal error" size="26">
       <input type="text" name="probability" placeholder="probability" value="1.0" size="6">
       <input type="text" name="remaining_hits" placeholder="hits (blank = forever)" size="18">
+      <input type="text" name="retry_after" placeholder="Retry-After s" size="12">
       <button class="primary" type="submit">Add rule</button>
     </div>
   </form>
@@ -59,6 +60,7 @@
       <td>
         <span class="pill {{statusClass .HTTPStatus}}">{{.HTTPStatus}}</span>
         <span class="pill neutral">{{.ReplyCode}}</span>
+        {{if .RetryAfter}}<span class="pill neutral">Retry-After {{deref32 .RetryAfter}}s</span>{{end}}
         <div class="muted">{{.ReplyText}}</div>
       </td>
       <td class="num">{{.Probability}}</td>

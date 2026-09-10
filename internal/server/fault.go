@@ -5,6 +5,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/dennis-kluge/emarsys-mock/internal/api"
@@ -51,6 +52,12 @@ func (s *Server) faultMiddleware(next http.Handler) http.Handler {
 			s.logger.Info("fault rule fired",
 				"rule", rule.ID, "method", r.Method, "path", r.URL.Path, "status", rule.HTTPStatus)
 
+			// Without this an injected 429 is missing the header a client's
+			// backoff reads, so the path the injection exists to exercise is
+			// the one path it does not reach.
+			if rule.RetryAfter != nil {
+				w.Header().Set("Retry-After", strconv.Itoa(*rule.RetryAfter))
+			}
 			api.ErrorStatus(w, rule.HTTPStatus, api.ReplyCode(rule.ReplyCode), rule.ReplyText)
 			return
 		}

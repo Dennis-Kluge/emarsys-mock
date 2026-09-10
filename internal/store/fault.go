@@ -23,8 +23,12 @@ type FaultRule struct {
 	Probability       float64 `json:"probability"`
 	// RemainingHits nil means "until disabled"; a number counts down and the
 	// rule disables itself when it reaches zero.
-	RemainingHits *int   `json:"remaining_hits"`
-	CreatedAt     string `json:"created_at"`
+	RemainingHits *int `json:"remaining_hits"`
+	// RetryAfter is the Retry-After header, in seconds. Left unset it is filled
+	// in for the statuses that carry one in production, so an injected 429 is
+	// indistinguishable from a real one.
+	RetryAfter *int   `json:"retry_after"`
+	CreatedAt  string `json:"created_at"`
 }
 
 // ErrNoFaultRule is returned when a rule id is unknown.
@@ -32,7 +36,8 @@ var ErrNoFaultRule = errors.New("no such fault rule")
 
 func (db *DB) FaultRules(ctx context.Context, onlyEnabled bool) ([]FaultRule, error) {
 	query := `SELECT id, enabled, match_method, match_path_pattern, match_body_contains,
-	                 http_status, reply_code, reply_text, probability, remaining_hits, created_at
+	                 http_status, reply_code, reply_text, probability, remaining_hits,
+	                 retry_after, created_at
 	          FROM fault_rules`
 	if onlyEnabled {
 		query += ` WHERE enabled = 1`
@@ -50,7 +55,7 @@ func (db *DB) FaultRules(ctx context.Context, onlyEnabled bool) ([]FaultRule, er
 		var r FaultRule
 		if err := rows.Scan(&r.ID, &r.Enabled, &r.MatchMethod, &r.MatchPathPattern,
 			&r.MatchBodyContains, &r.HTTPStatus, &r.ReplyCode, &r.ReplyText,
-			&r.Probability, &r.RemainingHits, &r.CreatedAt); err != nil {
+			&r.Probability, &r.RemainingHits, &r.RetryAfter, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -71,14 +76,22 @@ func (db *DB) CreateFaultRule(ctx context.Context, r FaultRule) (FaultRule, erro
 	if r.Probability <= 0 {
 		r.Probability = 1
 	}
+	// Production pairs these statuses with a Retry-After, so the mock does too
+	// unless the rule says otherwise.
+	if r.RetryAfter == nil && (r.HTTPStatus == 429 || r.HTTPStatus == 503) {
+		seconds := 60
+		r.RetryAfter = &seconds
+	}
 
 	res, err := db.Write.ExecContext(ctx,
 		`INSERT INTO fault_rules
 		 (enabled, match_method, match_path_pattern, match_body_contains,
-		  http_status, reply_code, reply_text, probability, remaining_hits, created_at)
-		 VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		  http_status, reply_code, reply_text, probability, remaining_hits,
+		  retry_after, created_at)
+		 VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.MatchMethod, r.MatchPathPattern, r.MatchBodyContains,
-		r.HTTPStatus, r.ReplyCode, r.ReplyText, r.Probability, r.RemainingHits, nowString())
+		r.HTTPStatus, r.ReplyCode, r.ReplyText, r.Probability, r.RemainingHits,
+		r.RetryAfter, nowString())
 	if err != nil {
 		return FaultRule{}, fmt.Errorf("create fault rule: %w", err)
 	}
