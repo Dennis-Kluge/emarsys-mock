@@ -237,10 +237,12 @@ All six phases are in place.
 - Control plane with fault injection, per-caller rate limiting, and the
   dashboard.
 
-Not built, and deliberately so: the `/api/v3` surface. It is not simply v2 with
-a different authentication scheme — several endpoints have different payload
-shapes — so it needs to be verified against the v3 Postman collection rather
-than assumed.
+Not built, and deliberately so: the `/api/v3` **endpoints**. v3 authentication
+is done — the token endpoint, bearer verification and permissions all work, so a
+v3 client gets past the door and then a clear 404. The handlers are missing
+because no machine-readable v3 reference could be found, and v3 is not simply v2
+with different authentication. `docs/api-reference.md` explains what is needed to
+finish it.
 
 Response shapes are pinned by golden files in `internal/server/testdata`.
 Regenerate them with `go test ./internal/server -update` and read the diff before

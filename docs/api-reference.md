@@ -6,8 +6,12 @@ changed, check the shape here first — do not guess paths or bodies.
 Sources:
 
 - v2 / WSSE: `emartech/developer-hub-public-assets` →
-  `resources/EmarsysV2PostmanCollection.json` (base URL `https://api.emarsys.net/api`)
-- v3 / OIDC: `emartech/Emarsys-postman-collection`
+  `resources/EmarsysV2PostmanCollection.json` (base URL `https://api.emarsys.net/api`).
+  Verified reachable; everything below is distilled from it.
+- v3 / OIDC: **no machine-readable source found.** `emartech/Emarsys-postman-collection`,
+  named in the original briefing, does not resolve — not the collection file under any
+  of the obvious names, not even a README — and `developer-hub-public-assets` carries
+  only the v2 collection. See "The v3 surface" below.
 
 ## Base URL
 
@@ -42,6 +46,45 @@ These come straight from the collection and are the reason the mock exists.
 | Segment delete | `GET /v2/filter/{segmentId}/delete` — a GET that mutates |
 | List delete | `/contactlist/{id}/delete` removes *contacts from* the list; `/deletelist` removes the list |
 | `getdata` result rows | carry `id` and `uid` alongside the numeric field keys |
+
+## The v3 surface
+
+The mock speaks v3's **authentication** but serves none of its **endpoints**.
+
+Done and tested:
+
+- `POST /oauth2/token`, client-credentials grant, issuing a signed HS256 token
+- bearer verification on every `/api/**` request, with the same per-user
+  endpoint permissions as WSSE
+- the 8 MB contact-batch body limit recognises `/api/v3/contacts`
+
+So a v3 client authenticates successfully today and then gets an honest 404
+inside a well-formed envelope:
+
+```
+GET /api/v3/contacts   (no token)      401  replyCode 1
+GET /api/v3/contacts   (valid bearer)  404  replyCode 2011
+                                            "Endpoint not implemented by emarsys-mock"
+```
+
+What is missing is every handler, and it is missing deliberately. v3 is not v2
+with a different authentication scheme — several endpoints have different
+payload shapes — so the handlers cannot be derived from the v2 collection. With
+no reachable v3 collection, writing them would mean guessing from prose
+documentation, which is exactly the failure mode this mock exists to avoid: a
+contract simulator that only knows the docs gives false confidence, and false
+confidence is worse than a 404 that says what it is.
+
+To close the gap, one of these is needed:
+
+1. The official v3 Postman collection, if it exists somewhere reachable.
+2. A recorded request/response pair per endpoint from the production account —
+   a proxy in front of the real calls for an afternoon is enough, and it is also
+   the more reliable source, because the documentation is less precise than the
+   real behaviour in several places.
+
+Then the handlers are a small job: the storage, validation, envelope and reply
+codes are all in place and shared.
 
 ## Endpoint inventory (relevant subset)
 
