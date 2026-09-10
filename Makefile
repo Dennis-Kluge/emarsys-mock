@@ -1,7 +1,8 @@
 BINARY := bin/emarsys-mock
 PKG    := ./cmd/emarsys-mock
 
-.PHONY: all build test vet fmt check run docker clean
+.PHONY: all build test race vet fmt check run docker smoke clean
+BASE ?= http://localhost:8080
 
 all: check build
 
@@ -34,6 +35,10 @@ run:
 
 docker:
 	docker build -t emarsys-mock:dev .
+
+# Runs the definition-of-done checks against an instance you already started.
+smoke:
+	./scripts/smoke.sh $(BASE)
 
 clean:
 	rm -rf bin

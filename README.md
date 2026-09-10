@@ -49,6 +49,53 @@ TOKEN=$(curl -s -u mock-client:mock-client-secret \
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v3/contacts
 ```
 
+## Using it in tests
+
+Reset between cases, run the integration against the mock, then assert on what
+it actually called:
+
+```go
+func TestWishlistSync(t *testing.T) {
+	const mock = "http://localhost:8080"
+	post(t, mock+"/_ctl/reset", "")                       // back to the seeded state
+
+	sync := wishlist.New(mock + "/api")                   // the only change: the base URL
+	if err := sync.Run(t.Context(), customer); err != nil {
+		t.Fatal(err)
+	}
+
+	// The mock recorded what the integration sent, so the assertion is on the
+	// real request rather than on a stub someone wrote to match the code.
+	got := get(t, mock+"/_ctl/requests?path=/api/v2/contact&method=PUT")
+	if !strings.Contains(got, `"31":"1"`) {
+		t.Errorf("the sync did not carry the opt-in field: %s", got)
+	}
+}
+```
+
+To cover the paths that matter, arm a failure first:
+
+```go
+post(t, mock+"/_ctl/faults",
+	`{"match_path_pattern":"/api/v2/contact*","http_status":429,"remaining_hits":1}`)
+// the next call gets a 429; the retry after it succeeds
+```
+
+In CI, run it as a container next to the job:
+
+```yaml
+services:
+  emarsys:
+    image: emarsys-mock:latest
+    env:
+      CTL_TOKEN: ci-token           # needed: requests do not arrive over loopback
+      RATE_LIMIT_PER_MINUTE: "5"    # low on purpose, so backoff logic runs
+    ports: ["8080:8080"]
+```
+
+`scripts/smoke.sh` exercises the whole contract against a running instance and
+is what CI runs against the container image.
+
 ## Configuration
 
 Everything is an environment variable with a working default, so the service
