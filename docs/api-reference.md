@@ -78,10 +78,18 @@ confidence is worse than a 404 that says what it is.
 To close the gap, one of these is needed:
 
 1. The official v3 Postman collection, if it exists somewhere reachable.
-2. A recorded request/response pair per endpoint from the production account —
-   a proxy in front of the real calls for an afternoon is enough, and it is also
-   the more reliable source, because the documentation is less precise than the
-   real behaviour in several places.
+2. A recording from the production account. `emarsys-record` in this repository
+   does exactly that: it proxies the real calls, pseudonymises the payloads, and
+   its summary reports each endpoint's request and response shape plus every
+   field that came back as more than one JSON type. That is the more reliable
+   source anyway — the documentation is less precise than the real behaviour in
+   several places, and every correction in this file came from an artefact
+   rather than from prose.
+
+   Pointed at the mock itself as a rehearsal, it independently rediscovered the
+   mixed `ids` types on upsert and the way `data` degrades to a string on an
+   error, which is a reasonable amount of confidence that it will find the same
+   class of detail in v3.
 
 Then the handlers are a small job: the storage, validation, envelope and reply
 codes are all in place and shared.

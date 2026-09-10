@@ -1,5 +1,7 @@
-BINARY := bin/emarsys-mock
-PKG    := ./cmd/emarsys-mock
+BINARY   := bin/emarsys-mock
+RECORDER := bin/emarsys-record
+PKG      := ./cmd/emarsys-mock
+REC_PKG  := ./cmd/emarsys-record
 
 .PHONY: all build test race vet fmt check run docker smoke clean
 BASE ?= http://localhost:8080
@@ -8,11 +10,14 @@ all: check build
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BINARY) $(PKG)
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(RECORDER) $(REC_PKG)
 
 # Proves the deployment promise: a static binary for another platform, no CGO.
 build-linux-arm64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
 		-o $(BINARY)-linux-arm64 $(PKG)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" \
+		-o $(RECORDER)-linux-arm64 $(REC_PKG)
 
 test:
 	go test -timeout 120s ./...

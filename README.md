@@ -96,6 +96,61 @@ services:
 `scripts/smoke.sh` exercises the whole contract against a running instance and
 is what CI runs against the container image.
 
+## Recording real traffic
+
+`emarsys-record` sits in front of an integration, forwards to the real API and
+writes down what went past. It exists because the documentation is less precise
+than the API in several places: every correction in `docs/api-reference.md` came
+from a recorded or exported artefact, never from prose.
+
+```sh
+emarsys-record -listen :8081 -out emarsys.jsonl
+# point the integration at http://localhost:8081 instead of api.emarsys.net
+emarsys-record -summarize emarsys.jsonl
+```
+
+The summary groups calls by endpoint, collapses id segments so fifty contacts
+are one endpoint rather than fifty, marks optional fields, and ends with the
+list that matters most:
+
+```
+Fields that came back as more than one JSON type
+These are where clients break: whichever type a client saw first is the
+one it was written against.
+
+  PUT /api/v2/contact/  response.data.ids[]: integer | string
+```
+
+It is a plain forward proxy, not a man in the middle, so there is no certificate
+to fake. WSSE survives the hop untouched: the digest covers the nonce, the
+timestamp and the secret, not the host or the body.
+
+### What ends up in the file
+
+Recording runs against a production account, so the traffic is real people's
+contact data. That shapes the defaults:
+
+- **Credentials are never written.** `X-WSSE`, `Authorization` and cookies are
+  recorded as `<redacted: scheme>`, and every header outside a small allowlist is
+  dropped rather than redacted — an allowlist cannot be defeated by a header
+  nobody thought of.
+- **Values are pseudonymised** (`-mode shapes`, the default). Structure, keys and
+  value shapes survive; an address stays an address and a date keeps its format,
+  so the payload still tells you what a handler has to cope with. Pseudonyms are
+  stable within a session and keyed per session, so the same contact is
+  recognisable across calls but recordings cannot be correlated or reversed.
+- **Reply codes and reply texts are kept verbatim**, with addresses stripped out
+  of them — getting the exact error wording is a large part of why a recording
+  is made.
+- **Non-JSON bodies are not recorded at all**, only their size and content type.
+  A CSV export is contact data in bulk and has no shape worth keeping.
+- `-mode raw` keeps everything verbatim. Against a production account the result
+  is a personal-data export and has to be handled as one; it is meant for an
+  account you seeded yourself.
+
+The tool prints all of this at startup, so nobody has to read the source to know
+what they are about to collect.
+
 ## Configuration
 
 Everything is an environment variable with a working default, so the service
@@ -241,8 +296,9 @@ Not built, and deliberately so: the `/api/v3` **endpoints**. v3 authentication
 is done — the token endpoint, bearer verification and permissions all work, so a
 v3 client gets past the door and then a clear 404. The handlers are missing
 because no machine-readable v3 reference could be found, and v3 is not simply v2
-with different authentication. `docs/api-reference.md` explains what is needed to
-finish it.
+with different authentication. `emarsys-record` is the way to get one: point it
+at the real v3 traffic for an afternoon and the summary is the specification.
+`docs/api-reference.md` has the detail.
 
 Response shapes are pinned by golden files in `internal/server/testdata`.
 Regenerate them with `go test ./internal/server -update` and read the diff before
