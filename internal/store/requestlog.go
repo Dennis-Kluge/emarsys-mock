@@ -51,3 +51,61 @@ func (db *DB) AppendRequestLog(ctx context.Context, e RequestLogEntry, max int) 
 	}
 	return nil
 }
+
+// RequestLogFilter narrows a request-log query.
+type RequestLogFilter struct {
+	// SinceID returns only entries newer than this id, which is how a test
+	// polls for "what happened since my last check" without timestamps.
+	SinceID int64
+	Path    string
+	Method  string
+	Status  int
+	Limit   int
+}
+
+// RequestLogEntries reads the log, oldest first so a caller can follow it.
+func (db *DB) RequestLogEntries(ctx context.Context, f RequestLogFilter) ([]RequestLogEntry, error) {
+	if f.Limit <= 0 {
+		f.Limit = 200
+	}
+	query := `SELECT id, ts, method, path, query, auth_user, http_status, reply_code,
+	                 request_body, response_body, duration_ms
+	          FROM request_log WHERE id > ?`
+	args := []any{f.SinceID}
+
+	if f.Path != "" {
+		query += ` AND path LIKE ?`
+		args = append(args, "%"+f.Path+"%")
+	}
+	if f.Method != "" {
+		query += ` AND method = ?`
+		args = append(args, f.Method)
+	}
+	if f.Status != 0 {
+		query += ` AND http_status = ?`
+		args = append(args, f.Status)
+	}
+	query += ` ORDER BY id LIMIT ?`
+	args = append(args, f.Limit)
+
+	rows, err := db.Read.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read request log: %w", err)
+	}
+	defer rows.Close()
+
+	out := []RequestLogEntry{}
+	for rows.Next() {
+		var e RequestLogEntry
+		var ts string
+		if err := rows.Scan(&e.ID, &ts, &e.Method, &e.Path, &e.Query, &e.AuthUser,
+			&e.HTTPStatus, &e.ReplyCode, &e.RequestBody, &e.ResponseBody, &e.DurationMS); err != nil {
+			return nil, err
+		}
+		if parsed, parseErr := time.Parse(time.RFC3339Nano, ts); parseErr == nil {
+			e.TS = parsed
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}

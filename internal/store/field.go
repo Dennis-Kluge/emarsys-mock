@@ -225,3 +225,35 @@ func sortedFieldIDs(values map[int]string) []int {
 	sort.Ints(ids)
 	return ids
 }
+
+// UpsertField inserts or replaces a field definition at a fixed id. It backs
+// POST /_ctl/seed, whose whole purpose is to load a production account's real
+// field catalogue rather than have the mock guess at it.
+func (db *DB) UpsertField(ctx context.Context, f FieldDef) error {
+	if f.StringID == "" {
+		f.StringID = slugify(f.Name)
+	}
+	if f.ApplicationType == "" {
+		f.ApplicationType = "shorttext"
+	}
+	_, err := db.Write.ExecContext(ctx,
+		`INSERT INTO fields (id, string_id, name, application_type, is_system, is_indexed, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(id) DO UPDATE SET
+		   string_id = excluded.string_id,
+		   name = excluded.name,
+		   application_type = excluded.application_type,
+		   is_indexed = excluded.is_indexed`,
+		f.ID, f.StringID, f.Name, f.ApplicationType, boolToInt(f.IsSystem), boolToInt(f.IsIndexed), nowString())
+	if err != nil {
+		return fmt.Errorf("upsert field %d: %w", f.ID, err)
+	}
+	return nil
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}

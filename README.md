@@ -73,6 +73,49 @@ runs unconfigured.
 | `EXPORT_TIMEZONE` | `Europe/Vienna` | Timezone for export timestamps |
 | `WEBHOOK_URL` | unset | Outbound webhook fired on event triggers |
 
+## Control plane
+
+`/_ctl` is ours and answers plain JSON rather than a replyCode envelope, so a
+response is never mistaken for an Emarsys one. Without a `CTL_TOKEN` it is
+reachable only from localhost; with one it works from anywhere, via the
+`X-Ctl-Token` header, a bearer token, a `?token=` parameter or a `ctl_token`
+cookie.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /_ctl/health` | Liveness and the effective configuration. Needs no credentials |
+| `POST /_ctl/reset` | Back to the seeded state. This is what a test calls between cases |
+| `POST /_ctl/seed` | Load fixtures. The `fields` block takes a production `GET /v2/field` response unchanged |
+| `GET /_ctl/requests` | The request log, filterable by `since`, `path`, `method` and `status` |
+| `GET /_ctl/events/triggers` | Recorded event triggers with their payloads |
+| `GET`/`POST /_ctl/faults`, `DELETE /_ctl/faults/{id}` | Fault rules |
+| `POST /_ctl/exports/{id}/status` | Force an export job into a state |
+
+### Fault injection
+
+A fault rule matches on method, a path glob and a body substring, and forces a
+response: HTTP status, replyCode and replyText. `probability` below 1 makes it
+flaky; `remaining_hits` spends it after a fixed number of requests.
+
+```sh
+# the next API request fails with 429, then the rule retires itself
+curl -X POST localhost:8080/_ctl/faults -d '{
+  "match_path_pattern": "/api/*",
+  "http_status": 429,
+  "reply_code": 2011,
+  "reply_text": "Rate limit exceeded",
+  "remaining_hits": 1
+}'
+```
+
+This is a core feature, not an extra. Without it a suite only ever exercises the
+happy path, and the retry, backoff and error-handling code of an integration --
+the part most likely to be wrong -- is never run at all.
+
+Rules apply only to `/api`. One that could break `/_ctl` would make the mock
+unrecoverable, because the endpoint needed to delete the rule would be the one
+failing.
+
 ## Two separate surfaces
 
 `/api/v2/...` and `/api/v3/...` must match production byte for byte. `/_ctl`
@@ -106,24 +149,23 @@ knows the docs gives false confidence.
 
 ## Status
 
-Phases 1 to 3 are in place.
+Phases 1 to 4 are in place.
 
-- Project skeleton, migrations, seeded system fields, both authentication
-  schemes, the response envelope and reply-code table, request logging, health.
+- Skeleton, migrations, seeded system fields, both authentication schemes, the
+  response envelope and reply-code table, request logging, health.
 - Contact endpoints: create, update, upsert, getdata, query, checkids, delete
   and last_change, with the batch partial-failure semantics and every behaviour
   from section 8 of the briefing covered by a named test.
 - Field endpoints: list, create, delete, choices.
 - External events: CRUD, trigger with per-contact `event_time` and `trigger_id`,
   idempotency on `trigger_id`, and an optional outbound webhook.
-- Contact lists: create, add, remove, replace, rename, delete, members, count
-  and field data.
-- Asynchronous exports: getchanges, getregistrations and list export, with the
-  polling state machine and CSV output in Vienna local time.
+- Contact lists and asynchronous exports with the polling state machine.
+- Control plane: reset, seed, request log, trigger log, fault injection, forced
+  export status; plus per-caller rate limiting with 429 and the usual headers.
 
-Still to come: the control plane with fault injection and rate limiting, and the
-dashboard. `/api` paths without a handler answer HTTP 404 inside a well-formed
-envelope so a client can tell that apart from a transport failure.
+Still to come: the dashboard. `/api` paths without a handler answer HTTP 404
+inside a well-formed envelope so a client can tell that apart from a transport
+failure.
 
 Response shapes are pinned by golden files in `internal/server/testdata`.
 Regenerate them with `go test ./internal/server -update` and read the diff before

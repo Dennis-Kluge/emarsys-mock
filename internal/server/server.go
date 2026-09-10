@@ -10,6 +10,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/dennis-kluge/emarsys-mock/internal/api"
 	"github.com/dennis-kluge/emarsys-mock/internal/auth"
@@ -20,21 +21,23 @@ import (
 )
 
 type Server struct {
-	cfg     config.Config
-	db      *store.DB
-	logger  *slog.Logger
-	auth    *auth.Authenticator
-	mux     *http.ServeMux
-	webhook *webhook.Sender
+	cfg         config.Config
+	db          *store.DB
+	logger      *slog.Logger
+	auth        *auth.Authenticator
+	mux         *http.ServeMux
+	webhook     *webhook.Sender
+	rateLimiter *httpx.RateLimiter
 }
 
 func New(cfg config.Config, db *store.DB, logger *slog.Logger) *Server {
 	s := &Server{
-		cfg:     cfg,
-		db:      db,
-		logger:  logger,
-		mux:     http.NewServeMux(),
-		webhook: webhook.New(cfg.WebhookURL, cfg.WebhookTimeout, logger),
+		cfg:         cfg,
+		db:          db,
+		logger:      logger,
+		mux:         http.NewServeMux(),
+		webhook:     webhook.New(cfg.WebhookURL, cfg.WebhookTimeout, logger),
+		rateLimiter: httpx.NewRateLimiter(cfg.RateLimitPerMinute),
 		auth: auth.New(directory{db}, auth.Options{
 			Skew:             cfg.WSSESkew,
 			RejectNonceReuse: cfg.WSSERejectReuse,
@@ -50,13 +53,31 @@ func (s *Server) routes() {
 	// Token issuance cannot itself require a token.
 	s.mux.Handle("POST /oauth2/token", s.auth.TokenHandler())
 
-	// Probes must answer before any credential is configured.
-	s.mux.HandleFunc("GET /_ctl/health", s.handleHealth)
+	// Probes must answer before any credential is configured, so health sits
+	// outside the control plane's guard.
+	s.mux.HandleFunc("GET /_ctl/health", s.handleCtlHealth)
 
 	authenticated := http.NewServeMux()
 	authenticated.HandleFunc("/", s.handleNotImplemented)
 	s.registerV2(authenticated)
 	s.mux.Handle("/api/", s.auth.Middleware(authenticated))
+
+	s.registerControlPlane()
+}
+
+// registerControlPlane wires /_ctl. Everything here is ours; none of it exists
+// in the real product.
+func (s *Server) registerControlPlane() {
+	ctl := http.NewServeMux()
+	ctl.HandleFunc("POST /_ctl/reset", s.handleCtlReset)
+	ctl.HandleFunc("POST /_ctl/seed", s.handleCtlSeed)
+	ctl.HandleFunc("GET /_ctl/requests", s.handleCtlRequests)
+	ctl.HandleFunc("GET /_ctl/events/triggers", s.handleCtlTriggers)
+	ctl.HandleFunc("GET /_ctl/faults", s.handleCtlFaultList)
+	ctl.HandleFunc("POST /_ctl/faults", s.handleCtlFaultCreate)
+	ctl.HandleFunc("DELETE /_ctl/faults/{faultId}", s.handleCtlFaultDelete)
+	ctl.HandleFunc("POST /_ctl/exports/{exportId}/status", s.handleCtlExportStatus)
+	s.mux.Handle("/_ctl/", s.ctlAuth(ctl))
 }
 
 // registerV2 wires the Emarsys-compatible v2 surface.
@@ -124,25 +145,46 @@ func (s *Server) registerV2(mux *http.ServeMux) {
 }
 
 // Handler returns the fully wrapped handler.
+//
+// The order matters. Logging sits near the outside so a rate-limited or
+// fault-injected request still shows up in the log, and both of those sit
+// outside the router so they never depend on a route existing.
 func (s *Server) Handler() http.Handler {
 	return httpx.Chain(s.mux,
 		httpx.Recover(s.logger),
 		httpx.Logging(s.db, httpx.LogOptions{
-			Max:          s.cfg.RequestLogMax,
-			SkipPrefixes: []string{"/_ctl/health", "/admin/static/"},
+			Max: s.cfg.RequestLogMax,
+			// Probe and asset traffic would otherwise crowd out the calls
+			// anyone actually wants to look at.
+			SkipPrefixes: []string{"/_ctl/health", "/_ctl/requests", "/admin/static/"},
 		}),
 		httpx.LimitBody(s.cfg.MaxBodyBytes, s.cfg.MaxContactBodyBytes),
+		s.rateLimiter.Middleware(rateLimitKey, isEmarsysPath),
+		s.faultMiddleware,
 	)
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	var fields int
-	_ = s.db.Read.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM fields`).Scan(&fields)
-	api.OK(w, map[string]any{
-		"status":    "ok",
-		"read_only": s.cfg.ReadOnly,
-		"fields":    fields,
-	})
+// rateLimitKey identifies the caller a limit applies to.
+//
+// Emarsys limits per API key, so the WSSE username or the bearer token is the
+// right bucket. The remote address is only a fallback for unauthenticated
+// calls, which are rejected a moment later anyway.
+func rateLimitKey(r *http.Request) string {
+	if header := r.Header.Get("X-WSSE"); header != "" {
+		if token, err := auth.ParseToken(header); err == nil {
+			return "wsse:" + token.Username
+		}
+	}
+	if header := r.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
+		return "bearer:" + header[len("Bearer "):]
+	}
+	return "addr:" + r.RemoteAddr
+}
+
+// isEmarsysPath keeps the limit off our own surfaces: a rate-limited control
+// plane would make the mock unrecoverable exactly when a test needs to reset it.
+func isEmarsysPath(path string) bool {
+	return strings.HasPrefix(path, "/api/")
 }
 
 // Shutdown waits for in-flight webhook deliveries, so a trigger accepted just

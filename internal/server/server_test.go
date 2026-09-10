@@ -70,6 +70,8 @@ func wsseRequest(t *testing.T, method, target string, body io.Reader) *http.Requ
 }
 
 func TestHealth(t *testing.T) {
+	// Health answers plain JSON rather than a replyCode envelope: it is our own
+	// surface, and a probe should never be mistaken for an Emarsys response.
 	handler, _ := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/_ctl/health", nil)
@@ -79,18 +81,34 @@ func TestHealth(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %s)", rec.Code, rec.Body)
 	}
-	var env struct {
-		ReplyCode int `json:"replyCode"`
-		Data      struct {
-			Status string `json:"status"`
-			Fields int    `json:"fields"`
-		} `json:"data"`
+	var payload struct {
+		Status         string `json:"status"`
+		Fields         int    `json:"fields"`
+		ExportTimezone string `json:"export_timezone"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
-		t.Fatalf("decode: %v", err)
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode: %v (body %s)", err, rec.Body)
 	}
-	if env.Data.Status != "ok" || env.Data.Fields == 0 {
-		t.Errorf("health payload = %+v", env.Data)
+	if payload.Status != "ok" || payload.Fields == 0 {
+		t.Errorf("health payload = %+v", payload)
+	}
+	if payload.ExportTimezone != "Europe/Vienna" {
+		t.Errorf("export_timezone = %q", payload.ExportTimezone)
+	}
+}
+
+// TestHealthNeedsNoCredentials keeps the probe usable before anything is
+// configured, which is what a container orchestrator needs.
+func TestHealthNeedsNoCredentials(t *testing.T) {
+	handler, _, _ := newConfiguredTestServer(t, func(c *config.Config) {
+		c.CtlToken = "s3cret"
+	})
+	req := httptest.NewRequest(http.MethodGet, "/_ctl/health", nil)
+	req.RemoteAddr = "10.1.2.3:4567"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 }
 

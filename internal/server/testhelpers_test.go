@@ -98,3 +98,20 @@ func createContact(t *testing.T, handler http.Handler, body string) envelope {
 	t.Helper()
 	return call(t, handler, http.MethodPost, "/api/v2/contact", body).expectOK(t)
 }
+
+// newSignedRequest builds an authenticated request without sending it, for the
+// tests that need to inspect response headers rather than the envelope.
+func newSignedRequest(t *testing.T, method, target, body string) *http.Request {
+	t.Helper()
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-WSSE", auth.BuildHeader(
+		"mock-api-user", "mock-secret", time.Now(), "a1b2c3d4e5f60718293a4b5c6d7e8f90"))
+	return req
+}
+
+func recordRequest(handler http.Handler, req *http.Request) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	return rec
+}
