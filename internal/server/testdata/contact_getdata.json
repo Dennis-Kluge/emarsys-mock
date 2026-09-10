@@ -1,0 +1,20 @@
+{
+  "http_status": 200,
+  "replyCode": 0,
+  "replyText": "OK",
+  "data": {
+    "errors": {
+      "nobody@example.com": {
+        "2008": "No contact found with the external id: nobody@example.com"
+      }
+    },
+    "result": [
+      {
+        "1": "Ada A.",
+        "31": "1",
+        "id": 1,
+        "uid": "<uid>"
+      }
+    ]
+  }
+}

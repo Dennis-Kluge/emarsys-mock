@@ -94,3 +94,38 @@ GET    /v2/filter/{segmentId}/delete
 GET    /v2/filter/{segmentId}/contacts/count
 POST   /v2/filter/{segmentId}/runs
 ```
+
+## Decisions the sources do not settle
+
+The Postman collections pin paths and shapes but not every behaviour. The
+points below were decided deliberately; each is cheap to change once a recorded
+production response settles it. Capturing one from prod is the way to close
+them — do not resolve them from the documentation, which is less precise than
+the real API.
+
+| Point | What the mock does | Why it is open |
+|---|---|---|
+| `POST /v2/contact/getid` | Served as an alias of `checkids`, also accepting `key_value` and `key_values` | The endpoint does not appear anywhere in the official collection. Integrations written against older documentation call it, so answering is better than a 404 |
+| Invalid field *value* (bad date, undefined choice) | Per-row error with replyCode 2006 and a message naming the field and reason | 2006 is documented as "invalid field id". Production may use a different code for a bad value; inventing a number would be worse than reusing this one with a clear text |
+| Unknown field *id* in a batch | Request-level error, HTTP 400 replyCode 2006 | A client sending an unknown id is misconfigured for every row, not just the one it appeared in |
+| `contact/query` limit | Enforced as 1–10000, replyCode 2016 outside that | The collection's own example passes `limit=1000000`, which contradicts the documented range |
+| `PUT /v2/contact` id types | Updated contact returns a string id, created contact an integer | The collection example shows only strings. The mixed behaviour is what the briefing recorded from production; the golden file `contact_upsert.json` is the one place to change if prod says otherwise |
+| Field list payload | Includes `string_id` alongside `id`, `name`, `application_type` | The collection example omits it, but real accounts return it and clients use it |
+| Choice `bit_position` | Set to the choice id | Meaningful for multichoice fields in production; the collection gives no rule for deriving it |
+| `null` as a field value | Treated the same as an empty string: clears the field | Consistent with the empty-string behaviour, but production may distinguish the two |
+
+## Value validation
+
+The mock validates every incoming value against its field's `application_type`,
+which is what produces the per-row errors an integration needs to see:
+
+- `date` — `YYYY-MM-DD` only. An ISO timestamp, a German or a US ordering is rejected.
+- `numeric` — must parse as a number.
+- `singlechoice` — must be one of the field's defined choice ids. This is why
+  opt-in (field 31) accepts `1` and `2` and rejects `"true"`, `"false"` and `0`.
+- `multichoice` / `interests` — a comma-separated list of defined choice ids.
+- Everything else is stored verbatim.
+
+An empty value is always accepted and **overwrites** what was there. That is not
+a convenience: it is how an integration that includes a field it did not mean to
+send wipes consent data in production, and the mock has to reproduce it.

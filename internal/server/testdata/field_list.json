@@ -1,0 +1,61 @@
+{
+  "http_status": 200,
+  "replyCode": 0,
+  "replyText": "OK",
+  "data": [
+    {
+      "id": 1,
+      "name": "First Name",
+      "application_type": "shorttext",
+      "string_id": "first_name"
+    },
+    {
+      "id": 2,
+      "name": "Last Name",
+      "application_type": "shorttext",
+      "string_id": "last_name"
+    },
+    {
+      "id": 3,
+      "name": "E-Mail",
+      "application_type": "shorttext",
+      "string_id": "email"
+    },
+    {
+      "id": 4,
+      "name": "Date of birth",
+      "application_type": "date",
+      "string_id": "birth_date"
+    },
+    {
+      "id": 5,
+      "name": "Gender",
+      "application_type": "singlechoice",
+      "string_id": "gender"
+    },
+    {
+      "id": 31,
+      "name": "Opt-in",
+      "application_type": "singlechoice",
+      "string_id": "opt_in"
+    },
+    {
+      "id": 10001,
+      "name": "Customer ID",
+      "application_type": "shorttext",
+      "string_id": "customer_id"
+    },
+    {
+      "id": 10002,
+      "name": "Wishlist updated at",
+      "application_type": "date",
+      "string_id": "wishlist_updated_at"
+    },
+    {
+      "id": 10003,
+      "name": "Is test contact",
+      "application_type": "singlechoice",
+      "string_id": "is_test_contact"
+    }
+  ]
+}

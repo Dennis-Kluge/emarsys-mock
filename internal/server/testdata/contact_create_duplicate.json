@@ -1,0 +1,15 @@
+{
+  "http_status": 200,
+  "replyCode": 0,
+  "replyText": "OK",
+  "data": {
+    "errors": {
+      "ada@example.com": {
+        "2009": "Contact with the external id already exists: ada@example.com"
+      }
+    },
+    "ids": [
+      3
+    ]
+  }
+}

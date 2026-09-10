@@ -1,0 +1,31 @@
+{
+  "http_status": 200,
+  "replyCode": 0,
+  "replyText": "OK",
+  "data": {
+    "31": [
+      {
+        "id": 1,
+        "choice": "True",
+        "bit_position": 1
+      },
+      {
+        "id": 2,
+        "choice": "False",
+        "bit_position": 2
+      }
+    ],
+    "5": [
+      {
+        "id": 1,
+        "choice": "Male",
+        "bit_position": 1
+      },
+      {
+        "id": 2,
+        "choice": "Female",
+        "bit_position": 2
+      }
+    ]
+  }
+}

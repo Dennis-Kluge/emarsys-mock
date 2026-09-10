@@ -106,8 +106,20 @@ knows the docs gives false confidence.
 
 ## Status
 
-Phase 1 is in place: project skeleton, migrations, seeded system fields, both
-authentication schemes, the response envelope and reply-code table, request
-logging and the health probe. Contact, field, event, list and export endpoints
-follow in the next phases; `/api` paths without a handler answer HTTP 404 inside
-a well-formed envelope so a client can tell that apart from a transport failure.
+Phases 1 and 2 are in place.
+
+- Project skeleton, migrations, seeded system fields, both authentication
+  schemes, the response envelope and reply-code table, request logging, health.
+- Contact endpoints: create, update, upsert, getdata, query, checkids, delete —
+  with the batch partial-failure semantics and every behaviour from section 8 of
+  the briefing covered by a named test.
+- Field endpoints: list, create, delete, choices.
+
+Still to come: events and contact lists, the asynchronous export state machine,
+the control plane with fault injection and rate limiting, and the dashboard.
+`/api` paths without a handler answer HTTP 404 inside a well-formed envelope so
+a client can tell that apart from a transport failure.
+
+Response shapes are pinned by golden files in `internal/server/testdata`.
+Regenerate them with `go test ./internal/server -update` and read the diff before
+committing: a change there is a change to the contract.

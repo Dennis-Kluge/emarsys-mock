@@ -52,7 +52,41 @@ func (s *Server) routes() {
 
 	authenticated := http.NewServeMux()
 	authenticated.HandleFunc("/", s.handleNotImplemented)
+	s.registerV2(authenticated)
 	s.mux.Handle("/api/", s.auth.Middleware(authenticated))
+}
+
+// registerV2 wires the Emarsys-compatible v2 surface.
+//
+// Clients differ on the trailing slash and both forms reach production, so
+// every collection-level route is registered twice.
+func (s *Server) registerV2(mux *http.ServeMux) {
+	both := func(method, path string, h http.HandlerFunc) {
+		mux.HandleFunc(method+" "+path, h)
+		mux.HandleFunc(method+" "+path+"/{$}", h)
+	}
+
+	// Fields
+	both("GET", "/api/v2/field", s.handleFieldList)
+	both("POST", "/api/v2/field", s.handleFieldCreate)
+	mux.HandleFunc("GET /api/v2/field/choices", s.handleFieldChoices)
+	mux.HandleFunc("DELETE /api/v2/field/{fieldId}", s.handleFieldDelete)
+	// /field/translate/{languageId} and /field/{fieldId}/choice are both five
+	// segments with a wildcard in a different position, which ServeMux cannot
+	// rank. One handler takes both and dispatches on the literal segment.
+	mux.HandleFunc("GET /api/v2/field/{first}/{second}", s.handleFieldSubpath)
+	mux.HandleFunc("GET /api/v2/field/{fieldId}/choice/translate/{languageId}", s.handleFieldChoice)
+
+	// Contacts
+	both("POST", "/api/v2/contact", s.handleContactCreate)
+	both("PUT", "/api/v2/contact", s.handleContactUpdate)
+	mux.HandleFunc("POST /api/v2/contact/getdata", s.handleContactGetData)
+	both("GET", "/api/v2/contact/query", s.handleContactQuery)
+	mux.HandleFunc("POST /api/v2/contact/checkids", s.handleContactCheckIDs)
+	// getid is not in the official Postman collection; it is served here
+	// because integrations written against the older documentation call it.
+	mux.HandleFunc("POST /api/v2/contact/getid", s.handleContactCheckIDs)
+	mux.HandleFunc("POST /api/v2/contact/delete", s.handleContactDelete)
 }
 
 // Handler returns the fully wrapped handler.
@@ -75,6 +109,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"read_only": s.cfg.ReadOnly,
 		"fields":    fields,
 	})
+}
+
+// internalError logs the cause and answers with the generic Emarsys internal
+// error, so a bug in the mock never reaches a client as a broken connection.
+func (s *Server) internalError(w http.ResponseWriter, what string, err error) {
+	s.logger.Error("request failed", "what", what, "err", err)
+	api.Error(w, api.CodeInternalError)
 }
 
 // handleNotImplemented answers any authenticated /api path that has no handler
