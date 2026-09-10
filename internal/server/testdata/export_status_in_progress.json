@@ -1,0 +1,14 @@
+{
+  "http_status": 200,
+  "replyCode": 0,
+  "replyText": "OK",
+  "data": {
+    "created": "<timestamp>",
+    "file_name": "changes_1.csv",
+    "ftp_dir": "",
+    "ftp_host": "",
+    "id": "1",
+    "status": "in progress",
+    "type": "changes"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "http_status": 200,
+  "replyCode": 0,
+  "replyText": "OK",
+  "data": {
+    "1": {
+      "fields": {
+        "1": "Ada A.",
+        "id": 1,
+        "uid": "<uid>"
+      }
+    },
+    "2": {
+      "fields": {
+        "1": "Grace",
+        "id": 2,
+        "uid": "<uid>"
+      }
+    }
+  }
+}

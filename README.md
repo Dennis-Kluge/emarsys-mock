@@ -106,19 +106,24 @@ knows the docs gives false confidence.
 
 ## Status
 
-Phases 1 and 2 are in place.
+Phases 1 to 3 are in place.
 
 - Project skeleton, migrations, seeded system fields, both authentication
   schemes, the response envelope and reply-code table, request logging, health.
-- Contact endpoints: create, update, upsert, getdata, query, checkids, delete —
-  with the batch partial-failure semantics and every behaviour from section 8 of
-  the briefing covered by a named test.
+- Contact endpoints: create, update, upsert, getdata, query, checkids, delete
+  and last_change, with the batch partial-failure semantics and every behaviour
+  from section 8 of the briefing covered by a named test.
 - Field endpoints: list, create, delete, choices.
+- External events: CRUD, trigger with per-contact `event_time` and `trigger_id`,
+  idempotency on `trigger_id`, and an optional outbound webhook.
+- Contact lists: create, add, remove, replace, rename, delete, members, count
+  and field data.
+- Asynchronous exports: getchanges, getregistrations and list export, with the
+  polling state machine and CSV output in Vienna local time.
 
-Still to come: events and contact lists, the asynchronous export state machine,
-the control plane with fault injection and rate limiting, and the dashboard.
-`/api` paths without a handler answer HTTP 404 inside a well-formed envelope so
-a client can tell that apart from a transport failure.
+Still to come: the control plane with fault injection and rate limiting, and the
+dashboard. `/api` paths without a handler answer HTTP 404 inside a well-formed
+envelope so a client can tell that apart from a transport failure.
 
 Response shapes are pinned by golden files in `internal/server/testdata`.
 Regenerate them with `go test ./internal/server -update` and read the diff before

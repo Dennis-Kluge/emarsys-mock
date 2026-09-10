@@ -46,9 +46,10 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	app := server.New(cfg, db, logger)
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(cfg, db, logger).Handler(),
+		Handler:           app.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -74,6 +75,10 @@ func run(logger *slog.Logger) error {
 		logger.Info("shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return srv.Shutdown(shutdownCtx)
+		err := srv.Shutdown(shutdownCtx)
+		// Wait for webhook deliveries so a trigger accepted just before the
+		// signal is not dropped on the floor.
+		app.Shutdown()
+		return err
 	}
 }

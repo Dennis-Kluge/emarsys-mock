@@ -125,9 +125,8 @@ func TestResetRestoresSeedState(t *testing.T) {
 		t.Error("opt-in field was not restored by reset")
 	}
 
-	// Tests call reset between cases, so it has to stay out of the way.
-	if elapsed > 100*time.Millisecond {
-		t.Errorf("Reset() took %s, want under 100ms", elapsed)
+	if elapsed > resetBudget {
+		t.Errorf("Reset() took %s, want under %s", elapsed, resetBudget)
 	}
 }
 

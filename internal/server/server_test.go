@@ -17,6 +17,14 @@ import (
 
 func newTestServer(t *testing.T) (http.Handler, *store.DB) {
 	t.Helper()
+	handler, db, _ := newConfiguredTestServer(t, nil)
+	return handler, db
+}
+
+// newConfiguredTestServer builds a server with the default test configuration,
+// letting a caller adjust it first.
+func newConfiguredTestServer(t *testing.T, mutate func(*config.Config)) (http.Handler, *store.DB, *Server) {
+	t.Helper()
 
 	db, err := store.Open(":memory:")
 	if err != nil {
@@ -33,18 +41,23 @@ func newTestServer(t *testing.T) (http.Handler, *store.DB) {
 	}
 
 	cfg := config.Config{
-		WSSESkew:            5 * time.Minute,
-		OAuthTokenTTL:       time.Hour,
-		OAuthSigningKey:     []byte("test-signing-key"),
-		RateLimitPerMinute:  1000,
-		MaxBatchContacts:    1000,
-		MaxBodyBytes:        10 << 20,
-		MaxContactBodyBytes: 8 << 20,
-		RequestLogMax:       1000,
-		ExportLocation:      loc,
+		WSSESkew:              5 * time.Minute,
+		ExportPollsBeforeDone: 2,
+		OAuthTokenTTL:         time.Hour,
+		OAuthSigningKey:       []byte("test-signing-key"),
+		RateLimitPerMinute:    1000,
+		MaxBatchContacts:      1000,
+		MaxBodyBytes:          10 << 20,
+		MaxContactBodyBytes:   8 << 20,
+		RequestLogMax:         1000,
+		ExportLocation:        loc,
+	}
+	if mutate != nil {
+		mutate(&cfg)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(cfg, db, logger).Handler(), db
+	srv := New(cfg, db, logger)
+	return srv.Handler(), db, srv
 }
 
 // wsseRequest builds a request signed with the seeded credentials.

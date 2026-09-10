@@ -16,22 +16,25 @@ import (
 	"github.com/dennis-kluge/emarsys-mock/internal/config"
 	"github.com/dennis-kluge/emarsys-mock/internal/httpx"
 	"github.com/dennis-kluge/emarsys-mock/internal/store"
+	"github.com/dennis-kluge/emarsys-mock/internal/webhook"
 )
 
 type Server struct {
-	cfg    config.Config
-	db     *store.DB
-	logger *slog.Logger
-	auth   *auth.Authenticator
-	mux    *http.ServeMux
+	cfg     config.Config
+	db      *store.DB
+	logger  *slog.Logger
+	auth    *auth.Authenticator
+	mux     *http.ServeMux
+	webhook *webhook.Sender
 }
 
 func New(cfg config.Config, db *store.DB, logger *slog.Logger) *Server {
 	s := &Server{
-		cfg:    cfg,
-		db:     db,
-		logger: logger,
-		mux:    http.NewServeMux(),
+		cfg:     cfg,
+		db:      db,
+		logger:  logger,
+		mux:     http.NewServeMux(),
+		webhook: webhook.New(cfg.WebhookURL, cfg.WebhookTimeout, logger),
 		auth: auth.New(directory{db}, auth.Options{
 			Skew:             cfg.WSSESkew,
 			RejectNonceReuse: cfg.WSSERejectReuse,
@@ -87,6 +90,37 @@ func (s *Server) registerV2(mux *http.ServeMux) {
 	// because integrations written against the older documentation call it.
 	mux.HandleFunc("POST /api/v2/contact/getid", s.handleContactCheckIDs)
 	mux.HandleFunc("POST /api/v2/contact/delete", s.handleContactDelete)
+	mux.HandleFunc("POST /api/v2/contact/last_change", s.handleContactLastChange)
+
+	// Events
+	both("GET", "/api/v2/event", s.handleEventList)
+	both("POST", "/api/v2/event", s.handleEventCreate)
+	mux.HandleFunc("GET /api/v2/event/{eventId}", s.handleEventGet)
+	mux.HandleFunc("POST /api/v2/event/{eventId}", s.handleEventRename)
+	mux.HandleFunc("POST /api/v2/event/{eventId}/delete", s.handleEventDelete)
+	mux.HandleFunc("POST /api/v2/event/{eventId}/trigger", s.handleEventTrigger)
+	mux.HandleFunc("GET /api/v2/event/{eventId}/usages", s.handleEventUsages)
+
+	// Contact lists. Note that /delete removes contacts from the list while
+	// /deletelist removes the list itself.
+	both("GET", "/api/v2/contactlist", s.handleContactListList)
+	both("POST", "/api/v2/contactlist", s.handleContactListCreate)
+	mux.HandleFunc("GET /api/v2/contactlist/{listId}/{$}", s.handleContactListMembers)
+	mux.HandleFunc("GET /api/v2/contactlist/{listId}/count", s.handleContactListCount)
+	both("GET", "/api/v2/contactlist/{listId}/contacts", s.handleContactListMembers)
+	mux.HandleFunc("GET /api/v2/contactlist/{listId}/contacts/data", s.handleContactListData)
+	mux.HandleFunc("POST /api/v2/contactlist/{listId}/add", s.handleContactListAdd)
+	mux.HandleFunc("POST /api/v2/contactlist/{listId}/delete", s.handleContactListRemove)
+	mux.HandleFunc("POST /api/v2/contactlist/{listId}/replace", s.handleContactListReplace)
+	mux.HandleFunc("POST /api/v2/contactlist/{listId}/rename", s.handleContactListRename)
+	mux.HandleFunc("POST /api/v2/contactlist/{listId}/deletelist", s.handleContactListDelete)
+	mux.HandleFunc("POST /api/v2/contactlist/{listId}/export", s.handleContactListExport)
+
+	// Asynchronous exports
+	mux.HandleFunc("POST /api/v2/contact/getchanges", s.handleGetChanges)
+	mux.HandleFunc("POST /api/v2/contact/getregistrations", s.handleGetRegistrations)
+	mux.HandleFunc("GET /api/v2/export/{exportId}", s.handleExportStatus)
+	mux.HandleFunc("GET /api/v2/export/{exportId}/data", s.handleExportData)
 }
 
 // Handler returns the fully wrapped handler.
@@ -110,6 +144,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"fields":    fields,
 	})
 }
+
+// Shutdown waits for in-flight webhook deliveries, so a trigger accepted just
+// before a SIGTERM is not silently dropped.
+func (s *Server) Shutdown() { s.webhook.Wait() }
 
 // internalError logs the cause and answers with the generic Emarsys internal
 // error, so a bug in the mock never reaches a client as a broken connection.

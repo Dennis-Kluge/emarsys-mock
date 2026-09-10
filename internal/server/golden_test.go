@@ -13,8 +13,15 @@ import (
 
 var updateGolden = flag.Bool("update", false, "rewrite the golden files in testdata")
 
-// uidPattern masks the random contact uid so the golden files stay stable.
-var uidPattern = regexp.MustCompile(`"uid":"[0-9a-f]{32}"`)
+// These patterns mask the values that legitimately differ between runs, so a
+// golden diff only ever shows a real change in shape or behaviour.
+var goldenMasks = []struct {
+	pattern *regexp.Regexp
+	replace string
+}{
+	{regexp.MustCompile(`"uid":"[0-9a-f]{32}"`), `"uid":"<uid>"`},
+	{regexp.MustCompile(`"created":"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"`), `"created":"<timestamp>"`},
+}
 
 // assertGolden compares a response body against testdata/<name>.json.
 //
@@ -34,7 +41,9 @@ func assertGolden(t *testing.T, name string, env envelope) {
 	if err != nil {
 		t.Fatalf("marshal response: %v", err)
 	}
-	raw = uidPattern.ReplaceAll(raw, []byte(`"uid":"<uid>"`))
+	for _, mask := range goldenMasks {
+		raw = mask.pattern.ReplaceAll(raw, []byte(mask.replace))
+	}
 
 	var pretty bytes.Buffer
 	if err := json.Indent(&pretty, raw, "", "  "); err != nil {
@@ -112,4 +121,28 @@ func TestGoldenResponses(t *testing.T) {
 		"/api/v2/contact/query/?1=Ada&return=3", ""))
 	assertGolden(t, "error_no_return_field", call(t, handler, http.MethodGet,
 		"/api/v2/contact/query/?3=ada@example.com", ""))
+
+	// Events, lists and exports.
+	assertGolden(t, "event_create", call(t, handler, http.MethodPost, "/api/v2/event",
+		`{"name":"wishlist_saved"}`))
+	assertGolden(t, "event_trigger", call(t, handler, http.MethodPost, "/api/v2/event/1/trigger",
+		`{"key_id":"3","contacts":[
+			{"external_id":"ada@example.com","trigger_id":"t-1"},
+			{"external_id":"nobody@example.com"}
+		 ],"data":{"sku":"A-1"}}`))
+	assertGolden(t, "event_usages", call(t, handler, http.MethodGet, "/api/v2/event/1/usages", ""))
+
+	assertGolden(t, "contactlist_create", call(t, handler, http.MethodPost, "/api/v2/contactlist",
+		`{"name":"Golden list","key_id":"3","external_ids":["ada@example.com","nobody@example.com"]}`))
+	assertGolden(t, "contactlist_add", call(t, handler, http.MethodPost, "/api/v2/contactlist/2/add",
+		`{"key_id":"3","external_ids":["grace@example.com"]}`))
+	assertGolden(t, "contactlist_count", call(t, handler, http.MethodGet,
+		"/api/v2/contactlist/2/count", ""))
+	assertGolden(t, "contactlist_data", call(t, handler, http.MethodGet,
+		"/api/v2/contactlist/2/contacts/data?fields=1", ""))
+
+	assertGolden(t, "export_start", call(t, handler, http.MethodPost, "/api/v2/contact/getchanges",
+		`{"contact_fields":[1,3],"add_field_names_header":1}`))
+	assertGolden(t, "export_status_in_progress", call(t, handler, http.MethodGet,
+		"/api/v2/export/1", ""))
 }

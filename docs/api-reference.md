@@ -113,6 +113,27 @@ the real API.
 | Field list payload | Includes `string_id` alongside `id`, `name`, `application_type` | The collection example omits it, but real accounts return it and clients use it |
 | Choice `bit_position` | Set to the choice id | Meaningful for multichoice fields in production; the collection gives no rule for deriving it |
 | `null` as a field value | Treated the same as an empty string: clears the field | Consistent with the empty-string behaviour, but production may distinguish the two |
+| `GET /v2/event/{eventId}` | Returns the single event as an object | The collection's example for this path shows an array of events, which looks like the list response attached to the wrong request |
+| Trigger response | Always `{"errors": {…}}`, empty when everything succeeded | The collection carries no success example for this path. A single consistent shape beats one that changes with the outcome |
+| Repeated `trigger_id` | Acknowledged, but neither stored nor announced a second time | `trigger_id` is Emarsys' idempotency key, so a client retrying after a timeout must not cause a second send |
+| Unknown event, list or export id | HTTP 400, replyCode 2011, with a message naming the id | No documented code covers "unknown object id" on these paths |
+| Export CSV layout | `Timestamp` first, then the requested `contact_fields` in the order given | The collection describes the request but never the file |
+| `GET /v2/export/{id}/data` before the job is done | HTTP 400, replyCode 2011, "is not finished yet" | The collection's only example for this path is an empty 500 |
+| Outbound webhook | Not an Emarsys feature at all: `WEBHOOK_URL` gets a POST on every accepted trigger | Ours, so the loop through the event bus can be closed in CI without a cloud dependency in the mock |
+
+## Timestamps
+
+Every timestamp the mock renders in a payload or an export file uses Vienna
+local time and the layout `YYYY-MM-DD HH:MM:SS`, with no offset and no zone
+marker. That is what production does, and it is why a client parsing an export
+timestamp as UTC is one or two hours out all year round. `EXPORT_TIMEZONE`
+changes the zone if an account is provisioned differently.
+
+The same rule applies on the way in: a bare date in a `time_range` is
+interpreted in that timezone, because that is the calendar a caller means when
+they ask for "yesterday".
+
+Stored data is always UTC; the conversion happens at the edge.
 
 ## Value validation
 
