@@ -1,0 +1,80 @@
+{{define "content"}}
+<h1>Fault rules</h1>
+<p class="lede">
+  Without these a test suite only ever walks the happy path, and the retry,
+  backoff and error handling of an integration — the part most likely to be
+  wrong — never runs. Rules apply to <code>/api</code> only: one that could break
+  the control plane would make the mock unrecoverable.
+</p>
+
+{{if not .ReadOnly}}
+<div class="panel">
+  <form class="inline" method="post" action="/admin/faults/quick">
+    <input type="hidden" name="preset" value="429">
+    <button class="primary" type="submit">Next request → 429</button>
+  </form>
+  <p class="muted" style="margin-bottom:0">Fires once, then retires itself.</p>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Add a rule</h2>
+  <form method="post" action="/admin/faults">
+    <div class="toolbar">
+      <select name="match_method">
+        <option value="">any method</option>
+        {{range .Methods}}<option value="{{.}}">{{.}}</option>{{end}}
+      </select>
+      <input type="text" name="match_path_pattern" placeholder="/api/v2/contact*" size="26">
+      <input type="text" name="match_body_contains" placeholder="body contains…" size="20">
+    </div>
+    <div class="toolbar">
+      <input type="text" name="http_status" placeholder="HTTP status" value="500" size="8">
+      <input type="text" name="reply_code" placeholder="replyCode" value="2011" size="8">
+      <input type="text" name="reply_text" placeholder="reply text" value="Internal error" size="26">
+      <input type="text" name="probability" placeholder="probability" value="1.0" size="6">
+      <input type="text" name="remaining_hits" placeholder="hits (blank = forever)" size="18">
+      <button class="primary" type="submit">Add rule</button>
+    </div>
+  </form>
+</div>
+{{end}}
+
+{{if not .Faults}}
+  <p class="empty">No fault rules. The mock is behaving itself.</p>
+{{else}}
+<div class="panel">
+<table>
+  <thead>
+    <tr><th class="num">ID</th><th>Match</th><th>Response</th><th>Probability</th><th>Hits left</th><th>State</th>{{if not .ReadOnly}}<th></th>{{end}}</tr>
+  </thead>
+  <tbody>
+  {{range .Faults}}
+    <tr>
+      <td class="num mono">{{.ID}}</td>
+      <td class="mono">
+        {{if .MatchMethod}}{{.MatchMethod}} {{else}}<span class="muted">ANY </span>{{end}}
+        {{if .MatchPathPattern}}{{.MatchPathPattern}}{{else}}<span class="muted">*</span>{{end}}
+        {{if .MatchBodyContains}}<div class="muted">body ~ {{.MatchBodyContains}}</div>{{end}}
+      </td>
+      <td>
+        <span class="pill {{statusClass .HTTPStatus}}">{{.HTTPStatus}}</span>
+        <span class="pill neutral">{{.ReplyCode}}</span>
+        <div class="muted">{{.ReplyText}}</div>
+      </td>
+      <td class="num">{{.Probability}}</td>
+      <td class="num">{{if .RemainingHits}}{{deref32 .RemainingHits}}{{else}}<span class="muted">∞</span>{{end}}</td>
+      <td>{{if .Enabled}}<span class="pill ok">enabled</span>{{else}}<span class="pill neutral">spent</span>{{end}}</td>
+      {{if not $.ReadOnly}}
+      <td>
+        <form class="inline" method="post" action="/admin/faults/{{.ID}}/delete">
+          <button class="danger" type="submit">Delete</button>
+        </form>
+      </td>
+      {{end}}
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{end}}

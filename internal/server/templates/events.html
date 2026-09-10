@@ -1,0 +1,71 @@
+{{define "content"}}
+<h1>External events</h1>
+<p class="lede">
+  A trigger is recorded and acknowledged here, and nothing else happens: the mock
+  runs no programs and sends no mail. What it does give you is the exact payload
+  the integration sent, which is the part worth asserting on.
+</p>
+
+<div class="panel">
+  <h2 style="margin-top:0">Defined events</h2>
+  {{if not .ReadOnly}}
+  <form class="inline" method="post" action="/admin/events" style="margin-bottom:0.75rem">
+    <input type="text" name="name" placeholder="New event name" required size="24">
+    <button class="primary" type="submit">Create event</button>
+  </form>
+  {{end}}
+  <table>
+    <thead><tr><th class="num">ID</th><th>Name</th><th>Created</th>{{if not .ReadOnly}}<th></th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Events}}
+      <tr>
+        <td class="num mono">{{.ID}}</td>
+        <td>{{.Name}}</td>
+        <td class="muted mono">{{local .Created}}</td>
+        {{if not $.ReadOnly}}
+        <td>
+          <form class="inline" method="post" action="/admin/events/{{.ID}}/delete">
+            <button class="danger" type="submit">Delete</button>
+          </form>
+        </td>
+        {{end}}
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Received triggers</h2>
+  {{if not .Triggers}}
+    <p class="empty">No triggers received yet.</p>
+  {{else}}
+  <table>
+    <thead>
+      <tr><th class="num">#</th><th>Received</th><th>Event</th><th>Contact</th><th>trigger_id</th><th>Payload</th></tr>
+    </thead>
+    <tbody>
+    {{range .Triggers}}
+      <tr>
+        <td class="num mono">{{.ID}}</td>
+        <td class="mono">{{local .ReceivedAt}}</td>
+        <td>{{.EventName}} <span class="field-id">{{.EventID}}</span></td>
+        <td>
+          <span class="mono">{{.ExternalID}}</span>
+          {{if .ContactID}}<a class="field-id" href="/admin/contacts/{{deref64 .ContactID}}">#{{deref64 .ContactID}}</a>{{end}}
+        </td>
+        <td class="mono muted">{{if .TriggerID}}{{.TriggerID}}{{else}}—{{end}}</td>
+        <td>
+          <details open>
+            <summary>payload</summary>
+            <pre>{{prettyJSON .Payload}}</pre>
+            {{if .EventTime}}<div class="muted">event_time: <span class="mono">{{.EventTime}}</span></div>{{end}}
+          </details>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+{{end}}

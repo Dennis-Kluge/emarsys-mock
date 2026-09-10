@@ -1,0 +1,52 @@
+{{define "requests_table"}}
+<div id="request-table"
+     {{if .Live}}hx-get="{{.RefreshURL}}" hx-trigger="every 3s" hx-swap="outerHTML"{{end}}>
+{{if not .Entries}}
+  <p class="empty">
+    Nothing logged yet. Point an integration at <code>/api</code> and it will show up here.
+  </p>
+{{else}}
+<div class="panel">
+<table>
+  <thead>
+    <tr>
+      <th class="num">#</th>
+      <th>Time</th>
+      <th>Method</th>
+      <th>Path</th>
+      <th class="hide-narrow">User</th>
+      <th class="num">HTTP</th>
+      <th class="num">reply</th>
+      <th class="num hide-narrow">ms</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Entries}}
+    <tr>
+      <td class="num mono">{{.ID}}</td>
+      <td class="mono">{{local .TS}}</td>
+      <td><span class="pill neutral">{{.Method}}</span></td>
+      <td>
+        <span class="mono">{{.Path}}{{if .Query}}<span class="muted">?{{.Query}}</span>{{end}}</span>
+        {{if or .RequestBody .ResponseBody}}
+        <details>
+          <summary>bodies</summary>
+          {{if .RequestBody}}<div class="muted">request</div><pre>{{.RequestBody}}</pre>{{end}}
+          {{if .ResponseBody}}<div class="muted">response</div><pre>{{.ResponseBody}}</pre>{{end}}
+        </details>
+        {{end}}
+      </td>
+      <td class="hide-narrow muted">{{.AuthUser}}</td>
+      <td class="num"><span class="pill {{statusClass .HTTPStatus}}">{{.HTTPStatus}}</span></td>
+      <td class="num">
+        {{if .ReplyCode}}<span class="pill {{replyClass .ReplyCode}}">{{deref32 .ReplyCode}}</span>{{else}}<span class="muted">—</span>{{end}}
+      </td>
+      <td class="num hide-narrow muted">{{.DurationMS}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+</div>
+{{end}}

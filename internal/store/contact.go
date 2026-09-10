@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -281,3 +282,115 @@ func newUID() (string, error) {
 	}
 	return hex.EncodeToString(buf), nil
 }
+
+// ContactSummary is a contact as the dashboard list shows it.
+type ContactSummary struct {
+	ID        int64
+	UID       string
+	CreatedAt string
+	UpdatedAt string
+	Values    map[int]string
+}
+
+// SearchContacts backs the dashboard's contact list. A numeric query is treated
+// as a contact id first and as a field value second, because "42" is far more
+// often an id than a first name.
+func (db *DB) SearchContacts(ctx context.Context, query string, fieldIDs []int, limit int) ([]ContactSummary, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	query = strings.TrimSpace(query)
+	switch {
+	case query == "":
+		rows, err = db.Read.QueryContext(ctx,
+			`SELECT id, uid, created_at, updated_at FROM contacts ORDER BY id DESC LIMIT ?`, limit)
+	default:
+		id, convErr := strconv.ParseInt(query, 10, 64)
+		if convErr == nil {
+			rows, err = db.Read.QueryContext(ctx,
+				`SELECT id, uid, created_at, updated_at FROM contacts WHERE id = ?`, id)
+			break
+		}
+		rows, err = db.Read.QueryContext(ctx,
+			`SELECT c.id, c.uid, c.created_at, c.updated_at FROM contacts c
+			 WHERE EXISTS (SELECT 1 FROM contact_values v
+			               WHERE v.contact_id = c.id AND v.value LIKE ?)
+			 ORDER BY c.id DESC LIMIT ?`, "%"+query+"%", limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("search contacts: %w", err)
+	}
+	defer rows.Close()
+
+	out := []ContactSummary{}
+	var ids []int64
+	for rows.Next() {
+		var c ContactSummary
+		if err := rows.Scan(&c.ID, &c.UID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		c.Values = map[int]string{}
+		out = append(out, c)
+		ids = append(ids, c.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	loaded, err := LoadContacts(ctx, db.Read, ids, fieldIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if row, ok := loaded[out[i].ID]; ok {
+			out[i].Values = row.Values
+		}
+		// The template indexes every column, so absent values need a key.
+		for _, id := range fieldIDs {
+			if _, ok := out[i].Values[id]; !ok {
+				out[i].Values[id] = ""
+			}
+		}
+	}
+	return out, nil
+}
+
+// CountContacts reports the total, which the dashboard shows next to a filtered
+// result so it is clear how much was left out.
+func (db *DB) CountContacts(ctx context.Context) (int, error) {
+	var n int
+	err := db.Read.QueryRowContext(ctx, `SELECT COUNT(*) FROM contacts`).Scan(&n)
+	return n, err
+}
+
+// Contact returns one contact with every stored value.
+func (db *DB) Contact(ctx context.Context, id int64) (ContactSummary, error) {
+	var c ContactSummary
+	err := db.Read.QueryRowContext(ctx,
+		`SELECT id, uid, created_at, updated_at FROM contacts WHERE id = ?`, id).
+		Scan(&c.ID, &c.UID, &c.CreatedAt, &c.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ContactSummary{}, ErrNoContact
+	}
+	if err != nil {
+		return ContactSummary{}, err
+	}
+
+	loaded, err := LoadContacts(ctx, db.Read, []int64{id}, nil)
+	if err != nil {
+		return ContactSummary{}, err
+	}
+	c.Values = map[int]string{}
+	if row, ok := loaded[id]; ok {
+		c.Values = row.Values
+	}
+	return c, nil
+}
+
+// ErrNoContact is returned when a contact id is unknown.
+var ErrNoContact = errors.New("no such contact")

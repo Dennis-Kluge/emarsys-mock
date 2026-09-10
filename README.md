@@ -116,6 +116,32 @@ Rules apply only to `/api`. One that could break `/_ctl` would make the mock
 unrecoverable, because the endpoint needed to delete the rule would be the one
 failing.
 
+## Dashboard
+
+`/admin` is a server-rendered debugging tool, guarded by the same token as the
+control plane. There is no build step and no CDN: the stylesheet and a vendored
+htmx are embedded in the binary, so the single-file deployment survives contact
+with the UI.
+
+| View | What it is for |
+|---|---|
+| Requests | The log, filterable by path, method, HTTP status and replyCode, with both bodies expandable. "Go live" tails it in place |
+| Contacts | Search, plus a detail page with every field value inline-editable and the full change history |
+| Fields | The catalogue: create and delete custom fields, manage choices, toggle the index flag that decides whether `contact/query` accepts a field |
+| Lists & segments | Membership, by contact id or e-mail |
+| Events | Defined events plus every received trigger with its payload expanded |
+| Exports | Job state, forcing a job to done, and the CSV |
+| Faults | Active rules, and one button for "next request → 429" |
+| Danger zone | Reset and fixture loading |
+
+Field ids are shown next to every field name, because the id is what an
+integration sends and what an error message names.
+
+`READONLY=1` hides every write control and refuses the writes server-side, so a
+shared instance can be handed out without anyone resetting it under a
+colleague's running test. It guards our own surface only — the Emarsys endpoints
+keep working, or the mock would be useless for the tests it exists to serve.
+
 ## Two separate surfaces
 
 `/api/v2/...` and `/api/v3/...` must match production byte for byte. `/_ctl`
@@ -149,7 +175,7 @@ knows the docs gives false confidence.
 
 ## Status
 
-Phases 1 to 4 are in place.
+All six phases are in place.
 
 - Skeleton, migrations, seeded system fields, both authentication schemes, the
   response envelope and reply-code table, request logging, health.
@@ -159,13 +185,15 @@ Phases 1 to 4 are in place.
 - Field endpoints: list, create, delete, choices.
 - External events: CRUD, trigger with per-contact `event_time` and `trigger_id`,
   idempotency on `trigger_id`, and an optional outbound webhook.
-- Contact lists and asynchronous exports with the polling state machine.
-- Control plane: reset, seed, request log, trigger log, fault injection, forced
-  export status; plus per-caller rate limiting with 429 and the usual headers.
+- Contact lists, segments as a static-membership facade, and asynchronous
+  exports with the polling state machine.
+- Control plane with fault injection, per-caller rate limiting, and the
+  dashboard.
 
-Still to come: the dashboard. `/api` paths without a handler answer HTTP 404
-inside a well-formed envelope so a client can tell that apart from a transport
-failure.
+Not built, and deliberately so: the `/api/v3` surface. It is not simply v2 with
+a different authentication scheme — several endpoints have different payload
+shapes — so it needs to be verified against the v3 Postman collection rather
+than assumed.
 
 Response shapes are pinned by golden files in `internal/server/testdata`.
 Regenerate them with `go test ./internal/server -update` and read the diff before

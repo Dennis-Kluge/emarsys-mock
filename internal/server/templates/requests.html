@@ -1,0 +1,30 @@
+{{define "content"}}
+<h1>Request log</h1>
+<p class="lede">
+  Every call the mock answered, newest first. This is the view to stand in while
+  debugging an integration: the reply code and both bodies are here, so a
+  response that looked like success can be checked for the errors hiding inside
+  it.
+</p>
+
+<form class="toolbar" method="get" action="/admin/requests">
+  <input type="text" name="path" value="{{.Filter.Path}}" placeholder="path contains…" size="26">
+  <select name="method">
+    <option value="">any method</option>
+    {{range .Methods}}<option value="{{.}}" {{if eq . $.Filter.Method}}selected{{end}}>{{.}}</option>{{end}}
+  </select>
+  <input type="text" name="status" value="{{if .Filter.Status}}{{.Filter.Status}}{{end}}" placeholder="HTTP status" size="8">
+  <input type="text" name="reply_code" value="{{.ReplyCodeFilter}}" placeholder="replyCode" size="8">
+  <button class="primary" type="submit">Filter</button>
+  <a href="/admin/requests">Clear</a>
+  <span class="spacer"></span>
+  {{if .Live}}
+    <a href="{{.ToggleURL}}"><span class="pill ok">live · refreshing</span></a>
+  {{else}}
+    <a href="{{.ToggleURL}}"><span class="pill neutral">go live</span></a>
+  {{end}}
+  <span class="muted">{{len .Entries}} shown</span>
+</form>
+
+{{template "requests_table" .}}
+{{end}}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · emarsys-mock</title>
+<link rel="stylesheet" href="/admin/static/app.css">
+<script src="/admin/static/htmx.min.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">emarsys<span>-mock</span></div>
+  <nav class="tabs">
+    <a href="/admin/requests" class="{{if eq .Nav "requests"}}active{{end}}">Requests</a>
+    <a href="/admin/contacts" class="{{if eq .Nav "contacts"}}active{{end}}">Contacts</a>
+    <a href="/admin/fields" class="{{if eq .Nav "fields"}}active{{end}}">Fields</a>
+    <a href="/admin/lists" class="{{if eq .Nav "lists"}}active{{end}}">Lists &amp; segments</a>
+    <a href="/admin/events" class="{{if eq .Nav "events"}}active{{end}}">Events</a>
+    <a href="/admin/exports" class="{{if eq .Nav "exports"}}active{{end}}">Exports</a>
+    <a href="/admin/faults" class="{{if eq .Nav "faults"}}active{{end}}">Faults</a>
+    <a href="/admin/danger" class="{{if eq .Nav "danger"}}active{{end}}">Danger zone</a>
+  </nav>
+  {{if .ReadOnly}}<div class="readonly-flag">read-only</div>{{end}}
+</header>
+<main>
+{{if .Flash}}<div class="flash {{.FlashKind}}">{{.Flash}}</div>{{end}}
+{{template "content" .}}
+</main>
+</body>
+</html>

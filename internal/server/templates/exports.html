@@ -1,0 +1,42 @@
+{{define "content"}}
+<h1>Exports</h1>
+<p class="lede">
+  Jobs report <code class="mono">in progress</code> — with a space, exactly as
+  production spells it — for their first polls and only then <code>done</code>.
+  Forcing a job to done here skips the wait when a test only wants the file.
+</p>
+
+{{if not .Exports}}
+  <p class="empty">No export jobs.</p>
+{{else}}
+<div class="panel">
+<table>
+  <thead>
+    <tr><th class="num">ID</th><th>Type</th><th>Status</th><th class="num">Polls</th><th>Created</th><th>File</th><th></th></tr>
+  </thead>
+  <tbody>
+  {{range .Exports}}
+    <tr>
+      <td class="num mono">{{.ID}}</td>
+      <td class="muted">{{.Type}}</td>
+      <td><span class="pill {{exportClass .Status}}">{{.Status}}</span></td>
+      <td class="num muted">{{.PollCount}} / {{.PollsBeforeDone}}</td>
+      <td class="muted mono">{{local .CreatedAt}}</td>
+      <td class="mono muted">{{.FileName}}</td>
+      <td>
+        {{if eq .Status "done"}}
+          <a href="/admin/exports/{{.ID}}/download">Download CSV</a>
+        {{else if not $.ReadOnly}}
+          <form class="inline" method="post" action="/admin/exports/{{.ID}}/status">
+            <input type="hidden" name="status" value="done">
+            <button type="submit">Force done</button>
+          </form>
+        {{end}}
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{end}}

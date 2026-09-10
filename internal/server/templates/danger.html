@@ -1,0 +1,49 @@
+{{define "content"}}
+<h1>Danger zone</h1>
+
+<div class="grid" style="margin-bottom:1.25rem">
+  <div class="stat"><div class="label">Contacts</div><div class="value">{{.Stats.Contacts}}</div></div>
+  <div class="stat"><div class="label">Fields</div><div class="value">{{.Stats.Fields}}</div></div>
+  <div class="stat"><div class="label">Events</div><div class="value">{{.Stats.Events}}</div></div>
+  <div class="stat"><div class="label">Triggers</div><div class="value">{{.Stats.Triggers}}</div></div>
+  <div class="stat"><div class="label">Logged requests</div><div class="value">{{.Stats.Requests}}</div></div>
+  <div class="stat"><div class="label">Export timezone</div><div class="value" style="font-size:1rem">{{.Timezone}}</div></div>
+</div>
+
+{{if .ReadOnly}}
+  <div class="panel">
+    <p class="muted" style="margin:0">
+      This instance runs read-only, so nothing here can be changed. Start it
+      without <code>READONLY</code> to enable these actions.
+    </p>
+  </div>
+{{else}}
+<div class="panel danger-zone">
+  <h2>Reset</h2>
+  <p class="lede">
+    Drops everything and re-runs the migrations, leaving the seeded field
+    catalogue behind. This is what a test suite calls between cases; it takes a
+    few milliseconds on an in-memory database.
+  </p>
+  <form method="post" action="/admin/danger/reset">
+    <button class="danger" type="submit">Reset the database</button>
+  </form>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Load a fixture</h2>
+  <p class="lede">
+    The <code>fields</code> block takes a production <code>GET /v2/field</code>
+    response unchanged, so the real catalogue of an account can be dumped and
+    loaded here rather than guessed at.
+  </p>
+  <form method="post" action="/admin/danger/seed">
+    <textarea name="payload" rows="10" spellcheck="false">{{.SeedExample}}</textarea>
+    <div class="toolbar" style="margin-top:0.5rem">
+      <label><input type="checkbox" name="reset" value="1"> reset first</label>
+      <button class="primary" type="submit">Load</button>
+    </div>
+  </form>
+</div>
+{{end}}
+{{end}}

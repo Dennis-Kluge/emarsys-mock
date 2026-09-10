@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
@@ -170,10 +171,21 @@ func (s *Server) handleCtlSeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	summary, err := s.applySeed(r, body)
+	if err != nil {
+		ctlFail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeCtl(w, http.StatusOK, map[string]any{"status": "seeded", "created": summary})
+}
+
+// applySeed loads a fixture. The control-plane endpoint and the dashboard form
+// both go through here, so a fixture behaves identically whichever way it
+// arrives.
+func (s *Server) applySeed(r *http.Request, body seedRequest) (map[string]int, error) {
 	if body.Reset {
 		if err := s.db.Reset(); err != nil {
-			ctlFail(w, http.StatusInternalServerError, "reset failed: "+err.Error())
-			return
+			return nil, fmt.Errorf("reset failed: %w", err)
 		}
 	}
 
@@ -190,14 +202,12 @@ func (s *Server) handleCtlSeed(w http.ResponseWriter, r *http.Request) {
 			ApplicationType: f.ApplicationType,
 			IsIndexed:       f.Indexed,
 		}); err != nil {
-			ctlFail(w, http.StatusInternalServerError, "seed field: "+err.Error())
-			return
+			return nil, fmt.Errorf("seed field: %w", err)
 		}
 		summary["fields"]++
 		for _, c := range f.Choices {
 			if err := s.db.AddChoice(r.Context(), f.ID, c.ID, c.Choice, c.ID); err != nil {
-				ctlFail(w, http.StatusInternalServerError, "seed choice: "+err.Error())
-				return
+				return nil, fmt.Errorf("seed choice: %w", err)
 			}
 		}
 	}
@@ -216,13 +226,11 @@ func (s *Server) handleCtlSeed(w http.ResponseWriter, r *http.Request) {
 	if len(body.Contacts) > 0 {
 		created, err := s.seedContacts(r, body)
 		if err != nil {
-			ctlFail(w, http.StatusBadRequest, err.Error())
-			return
+			return nil, err
 		}
 		summary["contacts"] = created
 	}
-
-	writeCtl(w, http.StatusOK, map[string]any{"status": "seeded", "created": summary})
+	return summary, nil
 }
 
 func (s *Server) seedContacts(r *http.Request, body seedRequest) (int, error) {

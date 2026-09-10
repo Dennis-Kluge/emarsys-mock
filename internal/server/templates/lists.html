@@ -1,0 +1,88 @@
+{{define "content"}}
+<h1>Lists &amp; segments</h1>
+<p class="lede">
+  Contact lists behave as they do in production. Segments are a facade: the mock
+  does not run the segmentation engine, so membership is whatever you set here.
+  A segment that is subtly wrong would be worse than one that is obviously static.
+</p>
+
+<div class="panel">
+  <h2 style="margin-top:0">Contact lists</h2>
+  {{if not .ReadOnly}}
+  <form class="inline" method="post" action="/admin/lists" style="margin-bottom:0.75rem">
+    <input type="text" name="name" placeholder="New list name" required size="24">
+    <button class="primary" type="submit">Create list</button>
+  </form>
+  {{end}}
+  {{if not .Lists}}
+    <p class="empty">No contact lists.</p>
+  {{else}}
+  <table>
+    <thead><tr><th class="num">ID</th><th>Name</th><th class="num">Members</th>{{if not .ReadOnly}}<th>Membership</th><th></th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Lists}}
+      <tr>
+        <td class="num mono">{{.ID}}</td>
+        <td>{{.Name}}</td>
+        <td class="num">{{.Count}}</td>
+        {{if not $.ReadOnly}}
+        <td>
+          <form class="inline" method="post" action="/admin/lists/{{.ID}}/members">
+            <input type="text" name="contact" placeholder="contact id or e-mail" size="22" required>
+            <button name="action" value="add" type="submit">Add</button>
+            <button name="action" value="remove" type="submit">Remove</button>
+          </form>
+        </td>
+        <td>
+          <form class="inline" method="post" action="/admin/lists/{{.ID}}/delete">
+            <button class="danger" type="submit">Delete</button>
+          </form>
+        </td>
+        {{end}}
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Segments</h2>
+  {{if not .ReadOnly}}
+  <form class="inline" method="post" action="/admin/segments" style="margin-bottom:0.75rem">
+    <input type="text" name="name" placeholder="New segment name" required size="24">
+    <button class="primary" type="submit">Create segment</button>
+  </form>
+  {{end}}
+  {{if not .Segments}}
+    <p class="empty">No segments.</p>
+  {{else}}
+  <table>
+    <thead><tr><th class="num">ID</th><th>Name</th><th class="num">Members</th>{{if not .ReadOnly}}<th>Membership</th><th></th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Segments}}
+      <tr>
+        <td class="num mono">{{.ID}}</td>
+        <td>{{.Name}}</td>
+        <td class="num">{{.Count}}</td>
+        {{if not $.ReadOnly}}
+        <td>
+          <form class="inline" method="post" action="/admin/segments/{{.ID}}/members">
+            <input type="text" name="contact" placeholder="contact id or e-mail" size="22" required>
+            <button name="action" value="add" type="submit">Add</button>
+            <button name="action" value="remove" type="submit">Remove</button>
+          </form>
+        </td>
+        <td>
+          <form class="inline" method="post" action="/admin/segments/{{.ID}}/delete">
+            <button class="danger" type="submit">Delete</button>
+          </form>
+        </td>
+        {{end}}
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+{{end}}

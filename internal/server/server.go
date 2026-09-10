@@ -8,6 +8,7 @@
 package server
 
 import (
+	"html/template"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -28,6 +29,8 @@ type Server struct {
 	mux         *http.ServeMux
 	webhook     *webhook.Sender
 	rateLimiter *httpx.RateLimiter
+	templates   map[string]*template.Template
+	fragments   *template.Template
 }
 
 func New(cfg config.Config, db *store.DB, logger *slog.Logger) *Server {
@@ -44,6 +47,12 @@ func New(cfg config.Config, db *store.DB, logger *slog.Logger) *Server {
 			SigningKey:       cfg.OAuthSigningKey,
 			TokenTTL:         cfg.OAuthTokenTTL,
 		}),
+	}
+	// The templates are embedded, so a parse failure is a programming error
+	// that every test run catches immediately rather than a runtime condition
+	// to handle.
+	if err := s.parseTemplates(); err != nil {
+		panic("dashboard templates: " + err.Error())
 	}
 	s.routes()
 	return s
@@ -63,6 +72,7 @@ func (s *Server) routes() {
 	s.mux.Handle("/api/", s.auth.Middleware(authenticated))
 
 	s.registerControlPlane()
+	s.registerDashboard()
 }
 
 // registerControlPlane wires /_ctl. Everything here is ours; none of it exists
@@ -137,6 +147,15 @@ func (s *Server) registerV2(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v2/contactlist/{listId}/deletelist", s.handleContactListDelete)
 	mux.HandleFunc("POST /api/v2/contactlist/{listId}/export", s.handleContactListExport)
 
+	// Segments, as a CRUD facade with a static member list. Note that create is
+	// a PUT and delete is a GET -- both are what production exposes.
+	both("GET", "/api/v2/filter", s.handleSegmentList)
+	both("PUT", "/api/v2/filter", s.handleSegmentCreate)
+	mux.HandleFunc("GET /api/v2/filter/{segmentId}", s.handleSegmentGet)
+	mux.HandleFunc("GET /api/v2/filter/{segmentId}/delete", s.handleSegmentDelete)
+	mux.HandleFunc("GET /api/v2/filter/{segmentId}/contacts/count", s.handleSegmentCount)
+	mux.HandleFunc("GET /api/v2/filter/{segmentId}/contacts/{contactId}", s.handleSegmentContact)
+
 	// Asynchronous exports
 	mux.HandleFunc("POST /api/v2/contact/getchanges", s.handleGetChanges)
 	mux.HandleFunc("POST /api/v2/contact/getregistrations", s.handleGetRegistrations)
@@ -156,7 +175,9 @@ func (s *Server) Handler() http.Handler {
 			Max: s.cfg.RequestLogMax,
 			// Probe and asset traffic would otherwise crowd out the calls
 			// anyone actually wants to look at.
-			SkipPrefixes: []string{"/_ctl/health", "/_ctl/requests", "/admin/static/"},
+			// The dashboard's own page loads would crowd out the API calls the
+			// log exists to show, so our surfaces stay out of it entirely.
+			SkipPrefixes: []string{"/_ctl/health", "/_ctl/requests", "/admin"},
 		}),
 		httpx.LimitBody(s.cfg.MaxBodyBytes, s.cfg.MaxContactBodyBytes),
 		s.rateLimiter.Middleware(rateLimitKey, isEmarsysPath),

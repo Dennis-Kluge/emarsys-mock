@@ -1,0 +1,72 @@
+{{define "content"}}
+<h1>Field catalogue</h1>
+<p class="lede">
+  The ids here are what integrations hardcode. The indexed flag decides whether
+  <code>contact/query</code> accepts a field — an unindexed one answers
+  replyCode 2015, which is a provisioning decision in production and a toggle
+  here.
+</p>
+
+{{if not .ReadOnly}}
+<div class="panel">
+  <h2 style="margin-top:0">Add a custom field</h2>
+  <form class="inline" method="post" action="/admin/fields">
+    <input type="text" name="name" placeholder="Field name" required size="24">
+    <select name="application_type">
+      {{range .ApplicationTypes}}<option value="{{.}}">{{.}}</option>{{end}}
+    </select>
+    <input type="text" name="string_id" placeholder="string_id (optional)" size="18">
+    <label><input type="checkbox" name="indexed" value="1"> indexed</label>
+    <button class="primary" type="submit">Create</button>
+  </form>
+</div>
+{{end}}
+
+<div class="panel">
+<table>
+  <thead>
+    <tr><th class="num">ID</th><th>Name</th><th>string_id</th><th>Type</th><th>Choices</th><th>Indexed</th>{{if not .ReadOnly}}<th></th>{{end}}</tr>
+  </thead>
+  <tbody>
+  {{range .Fields}}
+    <tr>
+      <td class="num mono">{{.ID}}</td>
+      <td>{{.Name}} {{if .IsSystem}}<span class="pill neutral">system</span>{{end}}</td>
+      <td class="mono muted">{{.StringID}}</td>
+      <td class="mono muted">{{.ApplicationType}}</td>
+      <td>
+        {{range .Choices}}<span class="pill neutral">{{.ID}} {{.Label}}</span> {{end}}
+        {{if not $.ReadOnly}}
+        <details>
+          <summary>add</summary>
+          <form class="inline" method="post" action="/admin/fields/{{.ID}}/choices">
+            <input type="text" name="choice_id" placeholder="id" size="4" required>
+            <input type="text" name="label" placeholder="label" size="14" required>
+            <button type="submit">Add</button>
+          </form>
+        </details>
+        {{end}}
+      </td>
+      <td>
+        {{if not $.ReadOnly}}
+        <form class="inline" method="post" action="/admin/fields/{{.ID}}/index">
+          <input type="hidden" name="indexed" value="{{if .IsIndexed}}0{{else}}1{{end}}">
+          <button type="submit">{{if .IsIndexed}}yes{{else}}no{{end}}</button>
+        </form>
+        {{else}}{{if .IsIndexed}}yes{{else}}no{{end}}{{end}}
+      </td>
+      {{if not $.ReadOnly}}
+      <td>
+        {{if not .IsSystem}}
+        <form class="inline" method="post" action="/admin/fields/{{.ID}}/delete">
+          <button class="danger" type="submit">Delete</button>
+        </form>
+        {{end}}
+      </td>
+      {{end}}
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}

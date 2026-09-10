@@ -1,0 +1,83 @@
+{{define "content"}}
+<h1>Contact {{.Contact.ID}}</h1>
+<p class="lede">
+  <span class="mono">uid {{.Contact.UID}}</span> · created {{local .CreatedAt}} · updated {{local .UpdatedAt}}
+</p>
+
+<div class="panel">
+  <h2 style="margin-top:0">Field values</h2>
+  <table>
+    <thead>
+      <tr><th class="num">ID</th><th>Field</th><th>Type</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+    {{range .Fields}}
+      {{$value := .Value}}
+      <tr {{if eq .ID 31}}class="row-highlight"{{end}}>
+        <td class="num mono">{{.ID}}</td>
+        <td>{{.Name}}{{if .Indexed}} <span class="pill neutral" title="contact/query works on this field">indexed</span>{{end}}</td>
+        <td class="muted mono">{{.ApplicationType}}</td>
+        <td>
+          {{if $.ReadOnly}}
+            {{if $value}}<span class="mono">{{$value}}</span>{{else}}<span class="muted">(empty)</span>{{end}}
+          {{else}}
+          <form class="inline" method="post" action="/admin/contacts/{{$.Contact.ID}}/field">
+            <input type="hidden" name="field_id" value="{{.ID}}">
+            {{if .Choices}}
+              <select name="value">
+                <option value="" {{if not $value}}selected{{end}}>(empty)</option>
+                {{range .Choices}}
+                  <option value="{{.ID}}" {{if eq (itoa .ID) $value}}selected{{end}}>{{.ID}} — {{.Label}}</option>
+                {{end}}
+              </select>
+            {{else}}
+              <input type="text" name="value" value="{{$value}}" size="34">
+            {{end}}
+            <button type="submit">Save</button>
+          </form>
+          {{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{if not .ReadOnly}}
+  <p class="muted" style="margin-bottom:0">
+    Saving an empty value clears the field rather than leaving it alone — the same
+    behaviour that wipes consent data in production when an integration sends a
+    field it did not mean to.
+  </p>
+  {{end}}
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0">Change history</h2>
+  <p class="lede">
+    Emarsys has no endpoint that returns this. The mock keeps it, which is both
+    what makes <code>getchanges</code> and <code>last_change</code> work and the
+    pattern a consent audit trail needs. Opt-in changes are highlighted.
+  </p>
+  {{if not .History}}
+    <p class="empty">Nothing recorded yet.</p>
+  {{else}}
+  <table>
+    <thead>
+      <tr><th>When</th><th>Field</th><th>From</th><th>To</th><th>Source</th></tr>
+    </thead>
+    <tbody>
+    {{range .History}}
+      <tr {{if eq .FieldID 31}}class="row-highlight"{{end}}>
+        <td class="mono">{{local .ChangedAt}}</td>
+        <td>{{index $.FieldNames .FieldID}} <span class="field-id">{{.FieldID}}</span></td>
+        <td class="mono">{{if .OldValue}}{{deref .OldValue}}{{else}}<span class="muted">(unset)</span>{{end}}</td>
+        <td class="mono">{{if deref .NewValue}}{{deref .NewValue}}{{else}}<span class="muted">(empty)</span>{{end}}</td>
+        <td class="muted">{{.Source}}</td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+
+<p><a href="/admin/contacts">← back to contacts</a></p>
+{{end}}

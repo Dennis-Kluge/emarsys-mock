@@ -120,6 +120,7 @@ the real API.
 | Export CSV layout | `Timestamp` first, then the requested `contact_fields` in the order given | The collection describes the request but never the file |
 | `GET /v2/export/{id}/data` before the job is done | HTTP 400, replyCode 2011, "is not finished yet" | The collection's only example for this path is an empty 500 |
 | Outbound webhook | Not an Emarsys feature at all: `WEBHOOK_URL` gets a POST on every accepted trigger | Ours, so the loop through the event bus can be closed in CI without a cloud dependency in the mock |
+| Segments | CRUD with a manually maintained member list; `criteria` is stored and never evaluated | Reimplementing the segmentation engine would mean guessing at behaviour nobody can verify, and a segment that is subtly wrong is worse than one that is obviously static |
 
 ## Timestamps
 
