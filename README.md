@@ -273,6 +273,11 @@ make check   # vet, gofmt check, tests
 make race    # tests under the race detector
 ```
 
+`CLAUDE.md` carries the working rules — the sourcing rule, the behaviours that
+must not be simplified away, and the traps that have already cost time.
+`docs/HANDOVER.md` carries the project status, the decisions taken and why, and
+what is still open.
+
 Handlers are written against `docs/api-reference.md`, which is distilled from
 the official Postman collections. Check the shape there before adding or
 changing an endpoint rather than guessing paths and bodies — the documentation
